@@ -1,0 +1,1 @@
+# Main pipeline: load → segment → extract → predict
