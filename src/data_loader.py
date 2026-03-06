@@ -8,22 +8,15 @@ from skimage.measure import label, regionprops
 import matplotlib.pyplot as plt
 from skimage.color import label2rgb
 
-def load_image(image_path):
-    try:
-        with rasterio.open(image_path) as src:
-            # Read data as masked array (nodata / .msk honored)
-            data = src.read(masked=True)  # (bands, H, W), masked array [web:108][web:112]
-
-            # data.mask is True where values are invalid/nodata
-            # We want mask == True where data are valid
-            valid_mask = ~data.mask[0]    # (H, W) boolean, assume all bands share mask [web:107][web:111]
-
-            # Convert to plain ndarray in HWC
-            image = np.transpose(data.data, (1, 2, 0))  # (H, W, C)
-
-        return image, valid_mask
-    except Exception as e:
-        raise FileNotFoundError(f"Could not load image: {image_path}. Error: {e}")
+def load_dsm_with_mask(path):
+    with rasterio.open(path) as src:
+        # Read as masked array so nodata and internal .msk are honored
+        data = src.read(masked=True)       # (bands, H, W), masked
+        dsm = np.transpose(data.data, (1, 2, 0))  # (H, W, C)
+        # valid where not masked
+        mask = ~data.mask[0]              # (H, W), assume shared mask across bands
+        profile = src.profile
+    return dsm, mask, profile
 
 def preprocess_image(image, tile_size=512, overlap=64):
     step = tile_size - overlap
