@@ -1,4 +1,4 @@
-from src.data_loader import load_dsm_with_mask, preprocess_image, reconstruct_image
+from src.data_loader import load_tif_with_mask, preprocess_image, reconstruct_image
 # from src.canopy_classification.scikit_img import crown_pixel_mask_from_ndvi_tiles, label_crowns_in_ndvi_tiles
 from src.pipeline import compute_chm_from_dsm, save_chm
 # from src.visualisation.visualise_tiles import show_labeled_tile
@@ -11,10 +11,11 @@ import numpy as np
 if __name__ == "__main__":
     dsm_path = 'data/raw/20250728-ISA-dsm-10cm.tif'
     # ndvi_path = 'data/raw/20250728-ISA-NDVI-10cm.tif'
-    dsm, mask, profile = load_dsm_with_mask(dsm_path)
+    dsm, mask, profile = load_tif_with_mask(dsm_path)
 
     # only needed when creating CHM. Use CHM image from now on from data
     # chm = compute_chm_from_dsm(dsm, mask, window_size=100, nodata=0.0)
+    # save_chm(chm, profile, "data/processed/20250728-ISA-chm-10cm.tif", nodata=0.0)
     
 
     # visualise some tiles
@@ -35,14 +36,6 @@ if __name__ == "__main__":
     # plt.title("Reconstructed CHM (from 4 tiles)")
     # plt.axis("off")
     # plt.show()
-
-    # chm_full = estimate_chm_from_dsm_tile(dsm_img) 
-    # tiles = preprocess_image(dsm_img, tile_size=512, overlap=64)
-    # chm_recon = reconstruct_image(chm_tiles, dsm_img.shape, mask, tile_size=512, overlap=64)
-    # diff = np.nanmax(np.abs(chm_recon - chm_full))
-    # print(f"Max absolute difference between reconstructed CHM and full CHM: {diff}")
-
-
 
 
 

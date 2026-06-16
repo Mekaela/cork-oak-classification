@@ -8,7 +8,7 @@ from skimage.measure import label, regionprops
 import matplotlib.pyplot as plt
 from skimage.color import label2rgb
 
-def load_dsm_with_mask(path):
+def load_tif_with_mask(path):
     with rasterio.open(path) as src:
         # Read as masked array so nodata and internal .msk are honored
         data = src.read(masked=True)       # (bands, H, W), masked
@@ -17,6 +17,7 @@ def load_dsm_with_mask(path):
         mask = ~data.mask[0]              # (H, W), assume shared mask across bands
         profile = src.profile
     return dsm, mask, profile
+
 
 def preprocess_image(image, tile_size=512, overlap=64):
     step = tile_size - overlap
