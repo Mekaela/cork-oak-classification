@@ -2,22 +2,14 @@ from detectree2.preprocessing.tiling import tile_data
 import geopandas as gpd
 import rasterio
 from pathlib import Path
+from detectree2.models.train import setup_cfg
+from detectree2.models.train import register_train_data
+from detectree2.preprocessing.tiling import to_traintest_folders
 
-# to create tiles from the training data
-# training_sites = [
-#     {
-#         "img_path": "data/plots/plot10/plot10_RGB_3band.tif",
-#         "crown_path": "data/plots/plot10/plot10_crowns.gpkg",
-#     },
-# ]
-
-
-# replace as 3 band RGB
-# src_path = "data/plots/plot10/plot10_RGB.tif"
-# dst_path = "data/plots/plot10/plot10_RGB_3band.tif"
 train_sites = ["plot10", "plot14", "plot39", "plot43", "plot88", "plot143", "plot183", "plot205", "plot242"]
 val_sites = ["plot61", "plot175", "plot238"]
 
+# replace as 3 band RGB
 def four_to_three_band(src_path, dst_path):
     Path(dst_path).parent.mkdir(parents=True, exist_ok=True)
     with rasterio.open(src_path) as src:
@@ -62,18 +54,18 @@ def create_training_tiles(sites, output_dir="data/plots/tiles/train/"):
 
 # create_training_tiles(val_sites, output_dir="data/plots/tiles/")
 
-# from detectree2.preprocessing.tiling import to_traintest_folders
-
-# data_folder = "data/plots/tiles/"
-# to_traintest_folders(data_folder, data_folder, test_frac=0.25, strict=False)
 
 
+def split_train_val(data_folder="data/plots/tiles/", test_frac=0.25, strict=False):
+    to_traintest_folders(data_folder, data_folder, test_frac=test_frac, strict=strict)
 
-from detectree2.models.train import register_train_data
+# after this, it creates folds in a 'train' folder, but next steps need the files to be moved up one level to 'train' level
 
-# train_location = "data/plots/tiles"
-train_location = "data/plots/tiles/"
-register_train_data(train_location, "Lizirias", val_fold=1)
+
+
+
+
+
 
 
 # check if it's looking for the correct train and val directories
@@ -89,7 +81,7 @@ register_train_data(train_location, "Lizirias", val_fold=1)
 # print(dval[:1])
 
 
-
+# check if image files can be read
 # from pathlib import Path
 # import cv2
 
@@ -100,29 +92,89 @@ register_train_data(train_location, "Lizirias", val_fold=1)
 
 
 
-
 # To apply pre-determined weights with the training data
-from detectree2.models.train import setup_cfg
+def train_model():
+    train_location = "data/plots/tiles/"
+    register_train_data(train_location, "Lizirias", val_fold=1)
+    # Set the base (pre-trained) model from the detectron2 model_zoo
+    base_model = "COCO-InstanceSegmentation/mask_rcnn_R_101_FPN_3x.yaml"
 
-# Set the base (pre-trained) model from the detectron2 model_zoo
-base_model = "COCO-InstanceSegmentation/mask_rcnn_R_101_FPN_3x.yaml"
+    trains = ("Lizirias_train",)
+    tests = ("Lizirias_val",)
 
-trains = ("Lizirias_train",)
-tests = ("Lizirias_val",)
+    out_dir = "data/train_outputs"
 
-out_dir = "./train_outputs"
+    cfg = setup_cfg(base_model, trains, tests, workers=4, eval_period=100, max_iter=3000, out_dir=out_dir)
+    cfg.MODEL.DEVICE = "cpu"
+    cfg.DATALOADER.NUM_WORKERS = 0
 
-cfg = setup_cfg(base_model, trains, tests, workers=4, eval_period=100, max_iter=3000, out_dir=out_dir)
-cfg.MODEL.DEVICE = "cpu"
-cfg.DATALOADER.NUM_WORKERS = 0
+    # # training the model
+    from detectree2.models.train import MyTrainer
 
-# # training the model
-from detectree2.models.train import MyTrainer
+    trainer = MyTrainer(cfg, patience=5)
+    trainer.resume_or_load(resume=False)
 
-trainer = MyTrainer(cfg, patience=5)
-trainer.resume_or_load(resume=False)
+    from detectron2.data import DatasetCatalog
+    print(DatasetCatalog.list())
 
-from detectron2.data import DatasetCatalog
-print(DatasetCatalog.list())
+    trainer.train()
 
-trainer.train()
+def update_pretrained_model():
+    train_location = "data/plots/tiles/"
+    register_train_data(train_location, "Lizirias", val_fold=1)
+    # Set the base (pre-trained) model from the detectron2 model_zoo
+    trained_model = "models/predicting/250312_flexi.pth"
+
+    trains = ("Lizirias_train",)
+    tests = ("Lizirias_val",)
+
+    out_dir = "data/train_outputs"
+
+    cfg = setup_cfg(update_model=trained_model, trains=trains, tests=tests, workers=4, eval_period=100, max_iter=3000, out_dir=out_dir)
+    cfg.DATALOADER.NUM_WORKERS = 0
+    cfg.MODEL.DEVICE = "cpu"
+
+    # # training the model
+    from detectree2.models.train import MyTrainer
+
+    trainer = MyTrainer(cfg, patience=5)
+    trainer.resume_or_load(resume=False)
+
+    from detectron2.data import DatasetCatalog
+    print(DatasetCatalog.list())
+
+    trainer.train()
+
+# update_pretrained_model()
+
+# plotting metrics from training
+import json
+import matplotlib.pyplot as plt
+from detectree2.models.train import load_json_arr
+
+experiment_folder = "data/train_outputs"
+experiment_metrics = load_json_arr(experiment_folder + '/metrics.json')
+
+plt.plot(
+   [x['iteration'] for x in experiment_metrics if 'validation_loss' in x],
+   [x['validation_loss'] for x in experiment_metrics if 'validation_loss' in x], label='Total Validation Loss', color='red')
+plt.plot(
+   [x['iteration'] for x in experiment_metrics if 'total_loss' in x],
+   [x['total_loss'] for x in experiment_metrics if 'total_loss' in x], label='Total Training Loss')
+
+plt.legend(loc='upper right')
+plt.title('Comparison of the training and validation loss of detectree2')
+plt.ylabel('Total Loss')
+plt.xlabel('Number of Iterations')
+plt.show()
+
+
+plt.plot(
+   [x['iteration'] for x in experiment_metrics if 'bbox/AP50' in x],
+   [x['bbox/AP50'] for x in experiment_metrics if 'bbox/AP50' in x], label='Validation AP50')
+
+plt.legend(loc='lower right')
+plt.title('Validation AP50 over training iterations')
+plt.ylabel('AP50')
+plt.xlabel('Number of Iterations')
+plt.show()

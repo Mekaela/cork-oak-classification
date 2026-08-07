@@ -4,8 +4,18 @@ from skimage.measure import label, regionprops
 from skimage.color import label2rgb
 import matplotlib.pyplot as plt
 
-from src.data_loader import load_image, preprocess_image
 
+def load_image(path):
+    """
+    Load a multi-band image from a file path.
+    Returns the image as a NumPy array with shape (H, W, C).
+    """
+    import rasterio
+
+    with rasterio.open(path) as src:
+        img = src.read()  # (bands, H, W)
+        img = np.transpose(img, (1, 2, 0))  # (H, W, bands)
+    return img
 
 # classify each tile as herbaceous or woody based on NDVI threshold of 0.55
 def classify_tiles(tiles, ndvi_threshold=0.6):
@@ -61,8 +71,3 @@ def label_crowns_in_ndvi_tiles(crown_mask_tiles, min_pixels=20):
             labeled_tiles[i, j] = labels_ij
 
     return labeled_tiles
-
-
-
-
-

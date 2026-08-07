@@ -19,22 +19,22 @@ import geopandas as gpd
 site_path = "data/"
 img_path = site_path + "/raw/20250728-ISA-RGB-10cm.tif"
 tiles_path = site_path + "/tiles/"
-predictions_path = site_path + "/tropical/tiles/"
+# predictions_path = site_path + "/montado2/tiles/"
+predictions_path = site_path + "/urban/tiles/"
+
 def tile_rgb():
-    # img_path =  "/rgb/2016/Paracou_RGB_2016_10cm.tif" 
-    
     # Set tiling parameters
     buffer = 30
     tile_width = 40
     tile_height = 40
-    threshold = 0.1
+    threshold = 0.1 
     
     return tile_data(img_path, tiles_path, buffer, tile_width, tile_height, threshold, mode="rgb")
 
-# takes a while to run
+# takes a while to run. Saves to base folder ./predictions
 def predict():
     # trained_model = 'models/predicting/250312_flexi.pth'
-    trained_model = 'models/predicting/230103_randresize_full.pth'
+    trained_model = 'models/weights/model_5_detectree2_2.pth'
     cfg = setup_cfg(update_model=trained_model)
     cfg.MODEL.DEVICE = "cpu"
     predictor = DefaultPredictor(cfg)
@@ -48,11 +48,11 @@ def project():
 def stitch():
     # crowns = stitch_crowns(tiles_path + "predictions_geo/", 1)
     crowns = stitch_crowns(predictions_path + "predictions_geo/", 1)
-    clean = clean_crowns(crowns, 0.6, confidence=0)
-    clean = clean[clean["Confidence_score"] > 0.4]
-    clean.to_file(site_path + "/crowns_out_tropical_1.gpkg")
+    clean = clean_crowns(crowns, 0.8, confidence=0.1)
+    # clean = clean[clean["Confidence_score"] > 0.2]
+    clean.to_file(site_path + "/crowns_out_urban_08_01.gpkg")
 
-
+# tile_rgb()
 # predict() 
 # project()
 stitch()

@@ -53,4 +53,4 @@ def save_chm(chm, profile, out_path, nodata=0.0):
     # plt.show()
 
     # to save the CHM:
-    # save_chm(chm, profile, "20250728-ISA-CHM-10cm.tif", nodata=0.0)
+    save_chm(chm, profile, "20250728-ISA-CHM-10cm.tif", nodata=0.0)
