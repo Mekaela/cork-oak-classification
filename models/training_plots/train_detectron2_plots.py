@@ -17,7 +17,7 @@ def four_to_three_band(src_path, dst_path):
         profile.update(count=3)
 
         rgb = src.read([1, 2, 3])
-
+ 
         with rasterio.open(dst_path, "w", **profile) as dst:
             dst.write(rgb)
 
@@ -123,6 +123,7 @@ def update_pretrained_model():
     train_location = "data/plots/tiles/"
     register_train_data(train_location, "Lizirias", val_fold=1)
     # Set the base (pre-trained) model from the detectron2 model_zoo
+    # try flexi, and then urban
     trained_model = "models/predicting/250312_flexi.pth"
 
     trains = ("Lizirias_train",)
@@ -148,33 +149,34 @@ def update_pretrained_model():
 # update_pretrained_model()
 
 # plotting metrics from training
-import json
-import matplotlib.pyplot as plt
-from detectree2.models.train import load_json_arr
+# import json
+# import matplotlib.pyplot as plt
+# from detectree2.models.train import load_json_arr
 
-experiment_folder = "data/train_outputs"
-experiment_metrics = load_json_arr(experiment_folder + '/metrics.json')
+# experiment_folder = "data/train_outputs"
+# experiment_metrics = load_json_arr(experiment_folder + '/metrics.json')
 
-plt.plot(
-   [x['iteration'] for x in experiment_metrics if 'validation_loss' in x],
-   [x['validation_loss'] for x in experiment_metrics if 'validation_loss' in x], label='Total Validation Loss', color='red')
-plt.plot(
-   [x['iteration'] for x in experiment_metrics if 'total_loss' in x],
-   [x['total_loss'] for x in experiment_metrics if 'total_loss' in x], label='Total Training Loss')
+# plt.plot(
+#    [x['iteration'] for x in experiment_metrics if 'validation_loss' in x],
+#    [x['validation_loss'] for x in experiment_metrics if 'validation_loss' in x], label='Total Validation Loss', color='red')
+# plt.plot(
+#    [x['iteration'] for x in experiment_metrics if 'total_loss' in x],
+#    [x['total_loss'] for x in experiment_metrics if 'total_loss' in x], label='Total Training Loss')
 
-plt.legend(loc='upper right')
-plt.title('Comparison of the training and validation loss of detectree2')
-plt.ylabel('Total Loss')
-plt.xlabel('Number of Iterations')
-plt.show()
+# plt.legend(loc='upper right')
+# plt.title('Comparison of the training and validation loss of detectree2')
+# plt.ylabel('Total Loss')
+# plt.xlabel('Number of Iterations')
+# plt.show()
 
 
-plt.plot(
-   [x['iteration'] for x in experiment_metrics if 'bbox/AP50' in x],
-   [x['bbox/AP50'] for x in experiment_metrics if 'bbox/AP50' in x], label='Validation AP50')
+# plt.plot(
+#    [x['iteration'] for x in experiment_metrics if 'bbox/AP50' in x],
+#    [x['bbox/AP50'] for x in experiment_metrics if 'bbox/AP50' in x], label='Validation AP50')
 
-plt.legend(loc='lower right')
-plt.title('Validation AP50 over training iterations')
-plt.ylabel('AP50')
-plt.xlabel('Number of Iterations')
-plt.show()
+# plt.legend(loc='lower right')
+# plt.title('Validation AP50 over training iterations')
+# plt.ylabel('AP50')
+# plt.xlabel('Number of Iterations')
+# plt.show()
+
