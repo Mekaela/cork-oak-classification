@@ -18,11 +18,34 @@ import matplotlib.pyplot as plt
 
 # input paths
 SITE_PATH = "data/lezirias"
-IMG_PATH = SITE_PATH + "/20250728-ISA-RGB-10cm_3band.tif"
-CROWN_PATH = SITE_PATH + "/Crown_training_polygons_60ha.gpkg"
-TRAIN_LOCATION = SITE_PATH + "/tiles/train/"
-TEST_LOCATION = SITE_PATH + "/tiles/test/"
-trained_model = 'data/train_outputs/model_final.pth'
+IMG_PATH = SITE_PATH + "/training_clipped_RGB.tif"
+CROWN_PATH = SITE_PATH + "/clipped_crowns_poly_training.gpkg"
+TILES_PATH = SITE_PATH + "/tiles"
+TRAIN_LOCATION = TILES_PATH + "/train"
+TEST_LOCATION = TILES_PATH + "/test"
+
+trained_model = 'data/train_outputs/model_3.pth'
+
+def create_training_data():
+
+    with rasterio.open(IMG_PATH) as raster:
+        crowns = gpd.read_file(CROWN_PATH).to_crs(raster.crs)
+
+    tile_data(
+        img_path=str(IMG_PATH),
+        out_dir=str(TILES_PATH),
+        crowns=crowns,
+        mode="rgb",
+        tile_placement="adaptive",
+        tile_width=40,
+        tile_height=40,
+        buffer=10,
+        threshold=0.05,
+        nan_threshold=0.9,
+    )
+
+
+
 
 def update_pretrained_model():
     trained_model = "models/predicting/250312_flexi.pth"
@@ -33,8 +56,9 @@ def update_pretrained_model():
     out_dir = "data/train_outputs"
 
     cfg = setup_cfg(update_model=trained_model, trains=trains, tests=tests, workers=4, eval_period=100, max_iter=3000, out_dir=out_dir)
-    cfg.DATALOADER.NUM_WORKERS = 4
-    cfg.MODEL.DEVICE = "cpu"
+    # needed if not using cuda. Otherwise, it will try to use GPU and fail if not available.
+    # cfg.DATALOADER.NUM_WORKERS = 4
+    # cfg.MODEL.DEVICE = "cpu"
 
     trainer = MyTrainer(cfg, patience=5)
     trainer.resume_or_load(resume=False)
@@ -75,29 +99,33 @@ def predict(trained_model):
     predict_on_data(TEST_LOCATION, predictor=predictor)
 
 if __name__ == "__main__":
-    data = rasterio.open(IMG_PATH)
-    crowns = gpd.read_file(CROWN_PATH)
+    # data = rasterio.open(IMG_PATH)
+    # crowns = gpd.read_file(CROWN_PATH)
 
-    # Set tiling parameters
-    buffer = 30
-    tile_width = 40
-    tile_height = 40
-    threshold = 0.05
-    data_folder = SITE_PATH + "/tiles/"
+    # to_traintest_folders(
+    #     TILES_PATH,
+    #     TILES_PATH,
+    #     test_frac=0.0,
+    #     strict=False,
+    #     folds=5,
+    #     )
 
-    # tile_data(IMG_PATH, data_folder, buffer, tile_width, tile_height, crowns, threshold, mode="rgb", tile_placement="grid", nan_threshold=0.9)
-    # to_traintest_folders(data_folder, data_folder, test_frac=0.15, strict=False, folds=5)
-    # register_train_data(TRAIN_LOCATION, 'lezirias', val_fold=5)
-    # update_pretrained_model() 
-    # post_training_analysis()
+    # register_train_data(
+    #     str(TRAIN_LOCATION),
+    #     "lezirias",
+    #     val_fold=5,
+    # )
+
+    # update_pretrained_model()
+    post_training_analysis()
     # note to self: check detectree2/notebooks/colab/evaluationJB.ipynb
     # for more evaluation
     # predict(trained_model)
     # project_to_geojson(TEST_LOCATION,  "predictions/", TEST_LOCATION + "predictions_geo/")
-    crowns = stitch_crowns(predictions_path + "predictions_geo/", 1)
-    clean = clean_crowns(crowns, 0.8, confidence=0.1)
-    # clean = clean[clean["Confidence_score"] > 0.2]
-    clean.to_file(site_path + "/crowns_out_urban_08_01.gpkg")
+    # crowns = stitch_crowns(predictions_path + "predictions_geo/", 1)
+    # clean = clean_crowns(crowns, 0.8, confidence=0.1)
+    # # clean = clean[clean["Confidence_score"] > 0.2]
+    # clean.to_file(site_path + "/crowns_out_urban_08_01.gpkg")
 
 
 

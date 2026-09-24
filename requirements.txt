@@ -30,7 +30,7 @@ entrypoints==0.4
 executing==2.2.1
 ExifRead==3.5.1
 filelock==3.25.1
-fiona==1.10.1
+
 fonttools==4.61.1
 frozenlist==1.8.0
 fsspec==2026.2.0
@@ -63,10 +63,10 @@ msgpack==1.1.2
 multidict==6.7.1
 mypy_extensions==1.1.0
 nest-asyncio==1.6.0
-netCDF4==1.6.5
+# netCDF4==1.6.5
 networkx==3.6.1
 numcodecs==0.16.5
-numpy==2.4.2
+numpy
 omegaconf==2.3.0
 opencv-python==4.13.0.92
 opencv-python-headless==4.13.0.92
@@ -102,7 +102,7 @@ requests==2.32.5
 rtree==1.4.1
 scikit-image==0.26.0
 scipy==1.17.0
-scivision==0.7.4
+#scivision==0.7.4
 setuptools==82.0.1
 shapely==2.1.2
 six==1.17.0

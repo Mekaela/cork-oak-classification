@@ -17,7 +17,7 @@ import geopandas as gpd
 
 # tiles have to be similar to the training data, which was 100m, with 30m buffer
 site_path = "data/lezirias/"
-img_path = site_path + "/raw/20250728-ISA-RGB-10cm.tif"
+img_path = site_path + "/20250728-ISA-RGB-10cm_3band.tif"
 tiles_path = site_path + "/tiles/"
 # predictions_path = site_path + "/montado2/tiles/"
 # predictions_path = site_path + "/urban/tiles/"
@@ -25,20 +25,20 @@ predictions_path = site_path + "tiles/test/"
 
 def tile_rgb():
     # Set tiling parameters
-    buffer = 30
+    buffer = 10
     tile_width = 40
     tile_height = 40
     threshold = 0.1 
     
-    return tile_data(img_path, tiles_path, buffer, tile_width, tile_height, threshold, mode="rgb")
+    return tile_data(img_path, tiles_path, buffer, tile_width, tile_height, threshold, mode="rgb", nan_threshold=0.9, tile_placement="adaptive")
 
 # takes a while to run. Saves to base folder ./predictions
 def predict(tiles_path):
     # trained_model = 'models/predicting/250312_flexi.pth'
     # trained_model = 'models/weights/model_5_detectree2_2.pth'
-    trained_model = 'data/train_outputs/model_final.pth'
+    trained_model = 'data/train_outputs/model_3.pth'
     cfg = setup_cfg(update_model=trained_model)
-    cfg.MODEL.DEVICE = "cpu"
+    # cfg.MODEL.DEVICE = "cpu"
     predictor = DefaultPredictor(cfg) 
     predict_on_data(tiles_path, predictor=predictor)
 
@@ -52,10 +52,10 @@ def stitch():
     crowns = stitch_crowns(predictions_path + "predictions_geo/", 1)
     clean = clean_crowns(crowns, 0.8, confidence=0.1)
     # clean = clean[clean["Confidence_score"] > 0.2]
-    clean.to_file(site_path + "/crowns_out_site_02.gpkg")
+    clean.to_file(site_path + "/crowns_out_site_clipped_01.gpkg")
 
 # tile_rgb()
 predict(tiles_path)
-project(tiles_path, predictions_path)
-stitch()
+# project(tiles_path, predictions_path)
+# stitch()
 
