@@ -8,14 +8,22 @@ from skimage.measure import label, regionprops
 import matplotlib.pyplot as plt
 from skimage.color import label2rgb
 
+
 def load_tif_with_mask(path):
     with rasterio.open(path) as src:
-        # Read as masked array so nodata and internal .msk are honored
-        data = src.read(masked=True)       # (bands, H, W), masked
-        dsm = np.transpose(data.data, (1, 2, 0))  # (H, W, C)
-        # valid where not masked
-        mask = ~data.mask[0]              # (H, W), assume shared mask across bands
-        profile = src.profile
+        data = src.read(masked=True)  # (bands, H, W)
+
+        # Valid where every band is valid.
+        mask = ~np.any(data.mask, axis=0)
+
+        # Convert masked cells to NaN instead of exposing fill values.
+        dsm = data.filled(np.nan)
+
+        # Convert from (bands, H, W) to (H, W, bands)
+        dsm = np.transpose(dsm, (1, 2, 0)).astype(np.float32)
+
+        profile = src.profile.copy()
+
     return dsm, mask, profile
 
 
@@ -24,7 +32,7 @@ def preprocess_image(image, tile_size=512, overlap=64):
     # image: (H, W, C)
     tiles = view_as_windows(image, (tile_size, tile_size, image.shape[2]), step=step)
     # tiles shape: (n_rows, n_cols, 1, tile_size, tile_size, C)
-    tiles = tiles.squeeze(axis=2)  # (n_rows, n_cols, tile_size, tile_size, C)
+    tiles = tiles.squeeze(axis=2)  
     return tiles
 
 def reconstruct_image(tiles, image_shape, mask, tile_size=512, overlap=64):

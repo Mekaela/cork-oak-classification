@@ -19,9 +19,8 @@ import geopandas as gpd
 site_path = "data/lezirias/"
 img_path = site_path + "/20250728-ISA-RGB-10cm_3band.tif"
 tiles_path = site_path + "/tiles/"
-# predictions_path = site_path + "/montado2/tiles/"
+predictions_path = site_path + "montado_trained_site/"
 # predictions_path = site_path + "/urban/tiles/"
-predictions_path = site_path + "tiles/test/"
 
 def tile_rgb():
     # Set tiling parameters
@@ -50,9 +49,9 @@ def project(tiles_path, predictions_path):
 def stitch():
     # crowns = stitch_crowns(tiles_path + "predictions_geo/", 1)
     crowns = stitch_crowns(predictions_path + "predictions_geo/", 1)
-    clean = clean_crowns(crowns, 0.8, confidence=0.1)
+    clean = clean_crowns(crowns, 0.8, confidence=0.10)
     # clean = clean[clean["Confidence_score"] > 0.2]
-    clean.to_file(site_path + "/crowns_out_site_clipped_01.gpkg")
+    clean.to_file(site_path + "/crowns_out_montado_plots_20260924_10.gpkg")
 
 # tile_rgb()
 predict(tiles_path)

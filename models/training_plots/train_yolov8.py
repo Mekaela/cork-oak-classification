@@ -5,17 +5,17 @@ import numpy as np
 import os
 
 
-MODEL_PATH = "runs/detect/yolov8_plots_run-10/weights/best.pt"
-INPUT_IMAGE = "data/plots/plot10/plot10_RGB_3band.tif"
-# INPUT_IMAGE = "data/raw/20250728-ISA-RGB-10cm_3band.tif"
-OUTPUT_DIR = "runs/detect"                # Where to save results
+MODEL_PATH = "runs/segment/yolov8_plots_run/weights/best.pt"
+# INPUT_IMAGE = "data/plots/plot175/plot175_RGB_3band.tif"
+INPUT_IMAGE = "data/raw/20250728-ISA-RGB-10cm_3band.tif"
+OUTPUT_DIR = "runs/segment"                # Where to save results
 TILE_SIZE = 640                                 # Must match your training size (usually 640)
 OVERLAP = 100                                   # Overlap between tiles to prevent cutting objects
-CONF_THRESHOLD = 0.03
+CONF_THRESHOLD = 0.10
 
 def train_yolov8():
     # Load the YOLOv8 model (you can choose 'yolov8n.pt', 'yolov8s.pt', etc.)
-    model = YOLO("yolov8n.pt")
+    model = YOLO("yolov8n-seg.pt")
 
     # Train using the dataset config in the same folder
     data_cfg = Path(__file__).parent / "data.yaml"
@@ -57,13 +57,146 @@ def predict_yolov8():
             
             print(f"  Tree found: Class {cls}, Confidence: {conf:.2f}, Box: {xyxy}")
 
-# this is shit, it gets stuck in a loop.
-def predict_large_image(model_path, input_img, output_dir, tile_size=640, overlap=100, conf=0.15):
-    # Load model
+# working, but ends up in wrong geographical
+# def predict_large_image(model_path, input_img, output_dir, tile_size=512, overlap=64, conf=0.15):
+
+#     import rasterio
+#     from rasterio.shutil import copy
+    
+#     model = YOLO(model_path)
+#     img = cv2.imread(input_img)
+    
+#     if img is None:
+#         print(f"Error: Could not read {input_img}")
+#         return
+
+#     h, w, _ = img.shape
+#     print(f"Processing image: {h}x{w}")
+
+#     os.makedirs(output_dir, exist_ok=True)
+
+#     step_x = tile_size - overlap
+#     step_y = tile_size - overlap
+
+#     all_detections = []
+
+#     # Sliding window with proper edge handling
+#     y_start = 0
+#     while y_start < h:
+#         x_start = 0
+#         while x_start < w:
+#             y_end = min(y_start + tile_size, h)
+#             x_end = min(x_start + tile_size, w)
+            
+#             tile = img[y_start:y_end, x_start:x_end]
+            
+#             if tile.size == 0:
+#                 x_start += step_x
+#                 continue
+            
+#             results = model.predict(
+#                 source=tile,
+#                 conf=conf,
+#                 verbose=False,
+#                 imgsz=tile_size
+#             )
+            
+#             for result in results:
+#                 if result.masks is not None:
+#                     polygons = result.masks.xy
+#                     confidences = result.boxes.conf.cpu().numpy()
+#                     classes = result.boxes.cls.cpu().numpy()
+                    
+#                     for i, poly in enumerate(polygons):
+#                         if confidences[i] < conf:
+#                             continue
+                        
+#                         # Scale polygon from inference resolution to actual tile size
+#                         tile_h, tile_w = tile.shape[:2]
+#                         scale_x = tile_w / tile_size
+#                         scale_y = tile_h / tile_size
+                        
+#                         # poly is in imgsz space, scale to actual tile dimensions
+#                         scaled_poly = poly.copy()
+#                         scaled_poly[:, 0] *= scale_x  # x coordinates
+#                         scaled_poly[:, 1] *= scale_y  # y coordinates
+                        
+#                         # Shift to global coordinates
+#                         global_points = scaled_poly + np.array([x_start, y_start])
+                        
+#                         all_detections.append({
+#                             "points": global_points,
+#                             "conf": float(confidences[i]),
+#                             "cls": int(classes[i])
+#                         })
+            
+#             x_start += step_x
+#             # Prevent infinite loop at edges
+#             if x_start >= w:
+#                 break
+        
+#         y_start += step_y
+#         if y_start >= h:
+#             break
+
+#     # Draw results
+#     result_img = img.copy()
+#     for det in all_detections:
+#         points = det["points"].astype(np.int32).reshape((-1, 1, 2))
+#         cv2.polylines(result_img, [points], isClosed=True, color=(0, 255, 0), thickness=2)
+        
+#         x_coords = points[:, 0, 0]
+#         y_coords = points[:, 0, 1]
+#         label = f"Tree {det['conf']:.2f}"
+#         cv2.putText(result_img, label, (int(x_coords.min()), int(y_coords.min()) - 10), 
+#                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+    
+
+#     output_path = os.path.join(output_dir, "result_large_geo_010.tif")
+#     cv2.imwrite(output_path, result_img)
+
+#     # Update the plain TIFF with georeferencing
+#     with rasterio.open(input_img) as src:
+#             profile = src.profile
+#             transform = src.transform
+#             crs = src.crs
+#     with rasterio.open(output_path, 'r+') as dst:
+#             dst.update_tags(**{'AREA_OR_POINT': 'Area'})
+#             dst.transform = transform
+#             dst.crs = crs
+    
+#     print(f"✅ Done! Found {len(all_detections)} trees.")
+#     print(f"Result saved to: {output_path}")
+
+
+def predict_large_image(model_path, input_img, output_dir, tile_size=512, overlap=64, conf=0.15):
+    import rasterio
+    import geopandas as gpd
+    from shapely.geometry import Polygon
+    import pandas as pd
+    
     model = YOLO(model_path)
     
-    # Read image
-    img = cv2.imread(input_img)
+    # Read image WITH georeferencing first
+    with rasterio.open(input_img) as src:
+        transform = src.transform
+        crs = src.crs
+        img_array = src.read()
+        
+        # Handle single or multi-band
+        if src.count == 1:
+            img_array = np.stack([img_array[0]] * 3, axis=-1)
+        else:
+            img_array = np.transpose(img_array, (1, 2, 0))
+        
+        # Convert to uint8 if needed
+        if img_array.dtype != np.uint8:
+            img_array = ((img_array - img_array.min()) / (img_array.max() - img_array.min()) * 255).astype(np.uint8)
+        
+        # Rasterio reads as RGB, OpenCV expects BGR
+        img = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+
     if img is None:
         print(f"Error: Could not read {input_img}")
         return
@@ -71,81 +204,122 @@ def predict_large_image(model_path, input_img, output_dir, tile_size=640, overla
     h, w, _ = img.shape
     print(f"Processing image: {h}x{w}")
 
-    # Create output directory
     os.makedirs(output_dir, exist_ok=True)
 
-    # Calculate steps
     step_x = tile_size - overlap
     step_y = tile_size - overlap
 
-    # List to store all detections
     all_detections = []
 
-    # Sliding Window
+    # Sliding window
     y_start = 0
     while y_start < h:
         x_start = 0
         while x_start < w:
-            # Define crop boundaries
             y_end = min(y_start + tile_size, h)
             x_end = min(x_start + tile_size, w)
             
-            # Extract tile
             tile = img[y_start:y_end, x_start:x_end]
             
-            # Run prediction on tile
+            if tile.size == 0:
+                x_start += step_x
+                continue
+            
             results = model.predict(
                 source=tile,
                 conf=conf,
                 verbose=False,
-                imgsz=tile_size  # Explicitly set size
+                imgsz=tile_size
             )
             
-            # Extract boxes and adjust coordinates
             for result in results:
-                if result.boxes is None:
-                    continue
-                
-                for box in result.boxes:
-                    x1, y1, x2, y2 = box.xyxy[0].tolist()
-                    conf = float(box.conf[0])
-                    cls = int(box.cls[0])
+                if result.masks is not None:
+                    polygons = result.masks.xy
+                    confidences = result.boxes.conf.cpu().numpy()
+                    classes = result.boxes.cls.cpu().numpy()
                     
-                    # Adjust coordinates to global image space
-                    global_x1 = x_start + x1
-                    global_y1 = y_start + y1
-                    global_x2 = x_start + x2
-                    global_y2 = y_start + y2
-                    
-                    all_detections.append({
-                        "x1": global_x1, "y1": global_y1,
-                        "x2": global_x2, "y2": global_y2,
-                        "conf": conf, "cls": cls
-                    })
+                    for i, poly in enumerate(polygons):
+                        if confidences[i] < conf:
+                            continue
+                        
+                        # Scale polygon to actual tile dimensions
+                        tile_h, tile_w = tile.shape[:2]
+                        scale_x = tile_w / tile_size
+                        scale_y = tile_h / tile_size
+                        
+                        scaled_poly = poly.copy()
+                        scaled_poly[:, 0] *= scale_x
+                        scaled_poly[:, 1] *= scale_y
+                        
+                        # Shift to global pixel coordinates
+                        global_points = scaled_poly + np.array([x_start, y_start])
+                        
+                        all_detections.append({
+                            "points": global_points,
+                            "conf": float(confidences[i]),
+                            "cls": int(classes[i])
+                        })
             
             x_start += step_x
-            if x_start + tile_size > w and x_start < w:
-                x_start = w - tile_size # Adjust for last tile
+            if x_start >= w:
+                break
         
         y_start += step_y
-        if y_start + tile_size > h and y_start < h:
-            y_start = h - tile_size
+        if y_start >= h:
+            break
 
-    # Draw all boxes on the original image
-    result_img = img.copy()
-    for det in all_detections:
-        x1, y1, x2, y2 = int(det["x1"]), int(det["y1"]), int(det["x2"]), int(det["y2"])
-        label = f"Cork Oak {det['conf']:.2f}"
-        cv2.rectangle(result_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(result_img, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-
-    # Save result
-    output_path = os.path.join(output_dir, "result_large.tif")
-    cv2.imwrite(output_path, result_img)
+    # Convert pixel coordinates to geographic coordinates and create polygons
+    geographic_polygons = []
     
-    print(f"✅ Done! Found {len(all_detections)} trees.")
-    print(f"Result saved to: {output_path}")
+    for det in all_detections:
+        points = det["points"]
+        
+        # Transform pixel coordinates to geographic coordinates
+        # rasterio.transform.xy converts row, col to x, y
+        # But our points are in (x, y) pixel space, so we need to use the transform directly
+        geo_coords = []
+        for px, py in points:
+            # Transform from pixel (col, row) to geographic (x, y)
+            gx, gy = transform * (px, py)
+            geo_coords.append((gx, gy))
+        
+        # Create Shapely Polygon
+        if len(geo_coords) >= 3:  # Need at least 3 points for a polygon
+            polygon = Polygon(geo_coords)
+            
+            geographic_polygons.append({
+                "geometry": polygon,
+                "confidence": det["conf"],
+                "class": det["cls"],
+                "area_px": polygon.area  # Optional: area in pixel units
+            })
+
+    # Create GeoDataFrame
+    gdf = gpd.GeoDataFrame(geographic_polygons, crs=crs)
+    
+    # Optional: Add additional attributes
+    gdf["tree_id"] = range(len(gdf))
+    gdf = gdf[["tree_id", "class", "confidence", "area_px", "geometry"]]
+    
+    print(f"Created {len(gdf)} polygon features")
+
+    # Save to GeoPackage
+    output_gpkg = os.path.join(output_dir, "tree_polygons010.gpkg")
+    gdf.to_file(output_gpkg, driver="GPKG", layer="tree_crowns")
+    
+    print(f"✅ Done! Found {len(gdf)} trees (polygons).")
+    print(f"GeoPackage saved to: {output_gpkg}")
+    print(f"CRS: {crs}")
+    
+    # Optional: Also save as GeoJSON for easy viewing
+    output_geojson = os.path.join(output_dir, "tree_polygons010.geojson")
+    gdf.to_file(output_geojson, driver="GeoJSON")
+    print(f"GeoJSON saved to: {output_geojson}")
+    
+    return gdf
+
 
 if __name__ == "__main__":
-    # predict_large_image(MODEL_PATH, INPUT_IMAGE, OUTPUT_DIR, tile_size=TILE_SIZE, overlap=OVERLAP, conf=CONF_THRESHOLD)
-    predict_yolov8()
+    # train_yolov8()
+    predict_large_image(MODEL_PATH, INPUT_IMAGE, OUTPUT_DIR, tile_size=TILE_SIZE, overlap=OVERLAP, conf=CONF_THRESHOLD)
+    # predict_yolov8()

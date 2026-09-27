@@ -217,3 +217,8 @@ __marimo__/
 *.pth
 *.txt
 *.pt
+*.jpg
+*.csv
+*.xml
+.DS_Store
+*.0

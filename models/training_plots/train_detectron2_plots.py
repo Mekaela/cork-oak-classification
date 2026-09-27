@@ -52,12 +52,15 @@ def create_training_tiles(sites, output_dir="data/plots/tiles/train/"):
                 nan_threshold=0.9,
             )
 
+# change to val_sites or train_sites depending on which you want to create tiles for
 # create_training_tiles(val_sites, output_dir="data/plots/tiles/")
 
 
+# changed test_frac to 0 as manually moved tests out
+def split_train_val(data_folder="data/plots/tiles/", test_frac=0, strict=False):
+    to_traintest_folders(data_folder, data_folder, test_frac=test_frac, strict=strict, folds=5)
 
-def split_train_val(data_folder="data/plots/tiles/", test_frac=0.25, strict=False):
-    to_traintest_folders(data_folder, data_folder, test_frac=test_frac, strict=strict)
+# split_train_val(data_folder="data/plots/tiles/", test_frac=0, strict=False)
 
 # after this, it creates folds in a 'train' folder, but next steps need the files to be moved up one level to 'train' level
 
@@ -120,8 +123,9 @@ def train_model():
     trainer.train()
 
 def update_pretrained_model():
-    train_location = "data/plots/tiles/"
-    register_train_data(train_location, "Lizirias", val_fold=1)
+    # train_location = "data/plots/tiles/"
+    train_location = "data/plots/tiles/train"
+    register_train_data(train_location, "Lizirias", val_fold=5)
     # Set the base (pre-trained) model from the detectron2 model_zoo
     # try flexi, and then urban
     trained_model = "models/predicting/250312_flexi.pth"
@@ -129,7 +133,7 @@ def update_pretrained_model():
     trains = ("Lizirias_train",)
     tests = ("Lizirias_val",)
 
-    out_dir = "data/train_outputs"
+    out_dir = "data/train_outputs_plots"
 
     cfg = setup_cfg(update_model=trained_model, trains=trains, tests=tests, workers=4, eval_period=100, max_iter=3000, out_dir=out_dir)
     cfg.DATALOADER.NUM_WORKERS = 0
@@ -146,7 +150,7 @@ def update_pretrained_model():
 
     trainer.train()
 
-# update_pretrained_model()
+update_pretrained_model()
 
 # plotting metrics from training
 # import json
