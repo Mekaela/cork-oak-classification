@@ -9,63 +9,10 @@ from rasterio.features import rasterize
 from sklearn.metrics import confusion_matrix, cohen_kappa_score
 from pathlib import Path
 
-BASE_DIR = Path("src/validation/")
-model = 'yolo_plots'
 
-PLOTS = [
-    "plot61",
-    "plot175",
-    "plot238",
-]
-
-REFERENCE_CROWNS_DIR = Path("data/plots")
-PREDICTED_CROWNS_DIR = BASE_DIR / model
-
-RESULTS_DIR = BASE_DIR / "accuracy_results"
-MASK_DIR = RESULTS_DIR / "tree_masks"
-
-REFERENCE_SUFFIX = "_crowns.gpkg"
-
-ALL_TOUCHED = False
-
-
-# --------------------------------------------------------------
-# Constants
-# --------------------------------------------------------------
 TREE = 1
 NON_TREE = 0
 BINARY_LABELS = [NON_TREE, TREE]
-
-
-# --------------------------------------------------------------
-# Path helpers
-# --------------------------------------------------------------
-def build_plot_paths(plot_id):
-    """Create the expected input paths for one plot."""
-    return {
-        "plot_id": plot_id,
-        "reference_vector": (
-            REFERENCE_CROWNS_DIR
-            / plot_id
-            / f"{plot_id}{REFERENCE_SUFFIX}"
-        ),
-        "predicted_vector": (
-            PREDICTED_CROWNS_DIR
-            / f"{plot_id}.gpkg"
-        ),
-        "grid_raster": (
-            PREDICTED_CROWNS_DIR
-            / f"{plot_id}_classified_01.tif"
-        ),
-    }
-
-
-def check_file_exists(path, description):
-    """Raise a clear error if an expected input file is missing."""
-    if not Path(path).exists():
-        raise FileNotFoundError(
-            f"Missing {description} for plot:\n{path}"
-        )
 
 
 # --------------------------------------------------------------
@@ -100,7 +47,7 @@ def read_crown_polygons(vector_path, grid):
     return gdf
 
 
-def rasterize_tree_mask(gdf, grid, all_touched=ALL_TOUCHED):
+def rasterize_tree_mask(gdf, grid):
     """
     Convert crown polygons into a binary tree mask.
 
@@ -114,7 +61,7 @@ def rasterize_tree_mask(gdf, grid, all_touched=ALL_TOUCHED):
         out_shape=(grid["height"], grid["width"]),
         transform=grid["transform"],
         fill=NON_TREE,
-        all_touched=all_touched,
+        all_touched=False,
         dtype="uint8",
     )
 
@@ -165,28 +112,34 @@ def calculate_binary_accuracy(y_true, y_pred):
         "confusion_matrix": cm,
     }
 
-
+def check_file_exists(path, description):
+    """Raise a clear error if an expected input file is missing."""
+    if not Path(path).exists():
+        raise FileNotFoundError(
+            f"Missing {description} for plot:\n{path}"
+        )
 # --------------------------------------------------------------
 # Plot evaluation
 # --------------------------------------------------------------
-def evaluate_plot(plot_paths, save_masks=True):
+def evaluate_plot(plot_paths):
     """Evaluate one plot using formatted reference/predicted/grid paths."""
     plot_id = plot_paths["plot_id"]
 
-    check_file_exists(
-        plot_paths["reference_vector"],
-        f"{plot_id} reference crowns",
-    )
+    """Raise a clear error if an expected input file is missing."""
+    if not Path(plot_paths["reference_vector"]).exists():
+        raise FileNotFoundError(
+            f"Missing {plot_id} reference crowns for plot"
+        )
 
-    check_file_exists(
-        plot_paths["predicted_vector"],
-        f"{plot_id} predicted crowns",
-    )
-
-    check_file_exists(
-        plot_paths["grid_raster"],
-        f"{plot_id} grid raster",
-    )
+    if not Path(plot_paths["predicted_vector"]).exists():
+            raise FileNotFoundError(
+                f"Missing {plot_id} predicted crowns for plot"
+            )
+    
+    if not Path(plot_paths["grid_raster"]).exists():
+            raise FileNotFoundError(
+                f"Missing {plot_id} raster for plot"
+            )
 
     grid = get_raster_grid(plot_paths["grid_raster"])
 
@@ -212,19 +165,6 @@ def evaluate_plot(plot_paths, save_masks=True):
     results["reference_vector"] = str(plot_paths["reference_vector"])
     results["predicted_vector"] = str(plot_paths["predicted_vector"])
     results["grid_raster"] = str(plot_paths["grid_raster"])
-
-    if save_masks:
-        save_binary_raster(
-            reference_mask,
-            grid,
-            MASK_DIR / f"{plot_id}_reference_tree_mask.tif",
-        )
-
-        save_binary_raster(
-            predicted_mask,
-            grid,
-            MASK_DIR / f"{plot_id}_predicted_tree_mask.tif",
-        )
 
     return results
 
@@ -252,22 +192,23 @@ def save_binary_raster(mask, grid, output_path):
 # --------------------------------------------------------------
 # Run all plots
 # --------------------------------------------------------------
-def evaluate_all_plots(plot_names, save_masks=True):
+def evaluate_all_plots(plot_names, pred_dir, ref_dir):
     """Loop through plot names, build paths, and calculate accuracy."""
-    MASK_DIR.mkdir(parents=True, exist_ok=True)
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-
     results = []
 
     for plot_id in plot_names:
         print(f"Evaluating: {plot_id}")
 
-        plot_paths = build_plot_paths(plot_id)
+        plot_paths = {
+            "plot_id": plot_id,
+            "reference_vector": (ref_dir / plot_id / f"{plot_id}_crowns.gpkg"),
+            "predicted_vector": (pred_dir / f"{plot_id}.gpkg"),
+            "grid_raster": (pred_dir / f"{plot_id}_classified_01.tif"),
+        }
 
         try:
             plot_result = evaluate_plot(
                 plot_paths,
-                save_masks=save_masks,
             )
 
         except Exception as exc:
@@ -297,14 +238,14 @@ def evaluate_all_plots(plot_names, save_masks=True):
         "kappa",
         "reference_vector",
         "predicted_vector",
-        "grid_raster",
+        # "grid_raster",
     ]
 
     results_df = results_df[output_columns]
-    results_csv = RESULTS_DIR / f"{model}_plot_accuracy_results.csv"
-    results_df.to_csv(results_csv, index=False)
+    print("\nPer-plot results:")
+    print(results_df)
 
-    return results_df, results_csv
+    return results_df
 
 
 # --------------------------------------------------------------
@@ -335,24 +276,6 @@ def calculate_pooled_accuracy(results_df):
     )
 
     pooled = calculate_binary_accuracy(y_true, y_pred)
-
-    return pooled
-
-
-# --------------------------------------------------------------
-# Run script
-# --------------------------------------------------------------
-if __name__ == "__main__":
-    results_df, results_csv = evaluate_all_plots(
-        plot_names=PLOTS,
-        save_masks=True,
-    )
-
-    print("\nPer-plot results:")
-    print(results_df)
-
-    pooled = calculate_pooled_accuracy(results_df)
-
     print("\nPooled results across all plots:")
     print(f"Total pixels: {pooled['n_pixels']}")
     print(f"Overall accuracy: {pooled['overall_accuracy']:.4f}")
@@ -360,4 +283,29 @@ if __name__ == "__main__":
     print("\nConfusion matrix:")
     print(pooled["confusion_matrix"])
 
-    print(f"\nPer-plot results saved to:\n{results_csv}")
+    return pooled
+
+def print_total_polygon_area(gpkg_path, plot, layer=None, target_crs="EPSG:3763"):
+    """
+    Print the total area of all polygons in a GeoPackage.
+
+    Parameters
+    ----------
+    gpkg_path : str
+        Path to the .gpkg file.
+    layer : str, optional
+        Layer name. If None, geopandas reads the first layer.
+    target_crs : str, optional
+        Projected CRS used for area calculation.
+    """
+    gdf = gpd.read_file(gpkg_path, layer=layer)
+
+    if target_crs is not None:
+        gdf = gdf.to_crs(target_crs)
+
+    total_area_m2 = gdf.geometry.area.sum()
+
+    print(f"{plot} Total area: {total_area_m2:.2f} m²")
+    return total_area_m2
+
+
