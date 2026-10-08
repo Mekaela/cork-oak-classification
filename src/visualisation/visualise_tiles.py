@@ -75,14 +75,10 @@ import glob
 import cv2
 
 # ---- CONFIG ----
-images_dir = "models/training/images/train"
-labels_dir = "models/training/labels/train"
-vis_out_dir = "models/training/visuals"   
+images_dir = "datasets/images/train"
+labels_dir = "datasets/labels/train"
+vis_out_dir = "datasets/visuals"   
 os.makedirs(vis_out_dir, exist_ok=True)
-
-# Adjust extension to match your image files
-image_extensions = [".tif"]
-# ----------------
 
 import numpy as np
 import cv2
@@ -140,19 +136,19 @@ for lbl in glob.glob(os.path.join(labels_dir, "*.txt")):
     base = os.path.splitext(os.path.basename(lbl))[0]
     label_map[base] = lbl
 
-for ext in image_extensions:
-    for img_path in glob.glob(os.path.join(images_dir, f"*{ext}")):
-        base = os.path.splitext(os.path.basename(img_path))[0]
-        label_path = label_map.get(base)
 
-        img = cv2.imread(img_path)
-        if img is None:
-            continue
+for img_path in glob.glob(os.path.join(images_dir, f"*.tif")):
+    base = os.path.splitext(os.path.basename(img_path))[0]
+    label_path = label_map.get(base)
 
-        if label_path:
-            img = draw_yolo_polygons(img, label_path)
+    img = cv2.imread(img_path)
+    if img is None:
+        continue
 
-        out_path = os.path.join(vis_out_dir, f"{base}_vis{ext}")
-        cv2.imwrite(out_path, img)
+    if label_path:
+        img = draw_yolo_polygons(img, label_path)
+
+    out_path = os.path.join(vis_out_dir, f"{base}_vis.tif")
+    cv2.imwrite(out_path, img)
 
 print("Done. Visualised images written to:", vis_out_dir)
