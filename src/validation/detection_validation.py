@@ -10,10 +10,10 @@ from shapely.validation import make_valid
 
 
 variable_dict = {
-    "ht_m": ["Fieldwork Heights", "(m)"],
-    "model_height_m": ["CHM Heights", "(m)"],
-    'area_m2': ["Manually Drawn Polygon Areas", "(m^2)"],
-    'model_area_m2': ["Polygon Areas", "(m^2)"]
+    "ht_m": ["Fieldwork Height", "(m)"],
+    "model_height_m": ["UAV Height", "(m)"],
+    'area_m2': ["Reference Polygon Area", "(m^2)"],
+    'model_area_m2': ["Polygon Area", "(m^2)"]
 }
 
 model_dict = {
@@ -140,11 +140,24 @@ def merge_filter_dfs(preditions_df, reference, crown_areas):
     return merged_areas
 
 def scatterplot(df, model, x, y):
+    # add linear regression line
+    r2 = r2_score(df[x], df[y])
+    rmse = np.sqrt(mean_squared_error(df[x], df[y]))
+    n = len(df)
+    coeffs = np.polyfit(df[x], df[y], 1)
+    trend_x = np.linspace(df[x].min(), df[x].max(), 100)
+    trend_y = np.polyval(coeffs, trend_x)
+
     plt.figure(figsize=(8, 6))
     plt.scatter(df[x], df[y], alpha=0.7)
+    plt.plot(trend_x, trend_y, color='red', linewidth=2)
+    plt.text(0.05, 0.95, f'$R^2$={r2:.3f}  RMSE={rmse:.2f}  n={n}',
+             transform=plt.gca().transAxes, va='top', fontsize=10)
+    plt.legend()
     plt.xlabel(f'{model_dict[model]} {variable_dict[x][0]} {variable_dict[x][1]}')
     plt.ylabel(f'{variable_dict[y][0]} {variable_dict[y][1]}')
-    plt.title(f'{model_dict[model]} {variable_dict[x][0]} vs {variable_dict[y][0]}')
+    # plt.title(f'{model_dict[model]} {variable_dict[x][0]} vs {variable_dict[y][0]}')
+    # plt.title(f'{model_dict[model]}')
     plt.grid(True)
     plt.show()
 
