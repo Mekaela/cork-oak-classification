@@ -12,49 +12,46 @@ import rasterio
 from pathlib import Path
 import matplotlib.pyplot as plt
 import geopandas as gpd
+from datetime import datetime
 
 
+# input paths
+SITE_PATH = "data/lezirias"
+TILES_PATH = SITE_PATH + "/tiles"
+TEST_LOCATION = TILES_PATH + "/test"
+IMG_PATH = SITE_PATH + "/20250728-ISA-RGB-10cm_3band.tif"
+PRED_PATH = SITE_PATH + "montado_trained_site/"
+# PRED_PATH = SITE_PATH + "/urban/tiles/"
+OUT_FILE = SITE_PATH + f"/crowns_out_montado_{datetime.now().strftime('%Y%m%d_%H%M%S')}.gpkg"
 
 # tiles have to be similar to the training data, which was 100m, with 30m buffer
-site_path = "data/lezirias/"
-img_path = site_path + "/20250728-ISA-RGB-10cm_3band.tif"
-tiles_path = site_path + "/tiles/"
-predictions_path = site_path + "montado_trained_site/"
-# predictions_path = site_path + "/urban/tiles/"
-
 def tile_rgb():
     # Set tiling parameters
     buffer = 10
     tile_width = 40
     tile_height = 40
     threshold = 0.1 
-    
-    return tile_data(img_path, tiles_path, buffer, tile_width, tile_height, threshold, mode="rgb", nan_threshold=0.9, tile_placement="adaptive")
+    return tile_data(IMG_PATH, TILES_PATH, buffer, tile_width, tile_height, threshold, mode="rgb", nan_threshold=0.9, tile_placement="adaptive")
 
-# takes a while to run. Saves to base folder ./predictions
-def predict(tiles_path):
-    # trained_model = 'models/predicting/250312_flexi.pth'
-    # trained_model = 'models/weights/model_5_detectree2_2.pth'
-    trained_model = 'data/train_outputs/model_3.pth'
+def predict(trained_model):
     cfg = setup_cfg(update_model=trained_model)
-    # cfg.MODEL.DEVICE = "cpu"
-    predictor = DefaultPredictor(cfg) 
-    predict_on_data(tiles_path, predictor=predictor)
+    cfg.MODEL.DEVICE = "cpu"
+    predictor = DefaultPredictor(cfg)
+    predict_on_data(TEST_LOCATION, predictor=predictor)
 
 def project(tiles_path, predictions_path):
     # project_to_geojson(tiles_path, tiles_path + "predictions/", tiles_path + "predictions_geo/")
     project_to_geojson(tiles_path,  "predictions/", predictions_path + "predictions_geo/")
-
  
 def stitch():
     # crowns = stitch_crowns(tiles_path + "predictions_geo/", 1)
-    crowns = stitch_crowns(predictions_path + "predictions_geo/", 1)
+    crowns = stitch_crowns(PRED_PATH + "predictions_geo/", 1)
     clean = clean_crowns(crowns, 0.8, confidence=0.10)
     # clean = clean[clean["Confidence_score"] > 0.2]
-    clean.to_file(site_path + "/crowns_out_montado_plots_20260924_10.gpkg")
+    clean.to_file(OUT_FILE)
 
 # tile_rgb()
-predict(tiles_path)
-# project(tiles_path, predictions_path)
+predict('data/train_outputs/model_3.pth')
+# project(TILES_PATH, PRED_PATH)
 # stitch()
 
