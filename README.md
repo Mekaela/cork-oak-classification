@@ -40,3 +40,32 @@ Also need to install setuptools (must be old version):
 conda install "setuptools<81"
 
 note: to get GPU working, the pytorch must be a cuda version suited to the user´s CUDA version
+
+## Data preparation
+
+
+
+## Training models
+YOLO: navigate to src/models/training
+- ensure that data.yaml points to the correct train and val folders created in data preparation
+- run train_yolov8.py
+
+Detectree2: navigate to src/models/training/train_detectron2.py'
+for multiple images/plots:
+- modify the 'train_sites' and 'val_sites' to your sites
+- uncomment create_tiles_across_sites() in main()
+- comment out create_training_tiles() in main()
+- run train_detectron2.py
+
+for one image/site:
+- modify img_path and crown_path in main() to your images
+- run train_detectron2.py
+
+
+## Validation metrics
+The files val_main calls all of the validation metrics for both detection and classification, as well as height and crown area metrics. 
+- The reference path 'data/plots' must contain the 3 band RGB, and the CHM of each plot
+- The model must be edited to be the model the user wants the validation metrics for, on line 8
+- The predictions must be in the relevant prediction directory, as on line 11
+- The reference csv must be specified on line 17, with the columns: location_id,plot_id,tree_id,ht_m
+- The crown area csv must be specified on line 18, with the columns: tree_id,area_m2

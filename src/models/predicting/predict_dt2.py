@@ -16,7 +16,7 @@ from datetime import datetime
 
 
 # input paths
-SITE_PATH = "data/lezirias"
+SITE_PATH = "data"
 TILES_PATH = SITE_PATH + "/tiles"
 TEST_LOCATION = TILES_PATH + "/test"
 IMG_PATH = SITE_PATH + "/20250728-ISA-RGB-10cm_3band.tif"
