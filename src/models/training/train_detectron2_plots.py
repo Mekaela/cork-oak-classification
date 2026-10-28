@@ -1,31 +1,12 @@
 from detectree2.preprocessing.tiling import tile_data
 import geopandas as gpd
 import rasterio
-from pathlib import Path
 from detectree2.models.train import setup_cfg
 from detectree2.models.train import register_train_data
 from detectree2.preprocessing.tiling import to_traintest_folders
 
 train_sites = ["plot10", "plot14", "plot39", "plot43", "plot88", "plot143", "plot183", "plot205", "plot242"]
 val_sites = ["plot61", "plot175", "plot238"]
-
-# replace as 3 band RGB
-def four_to_three_band(src_path, dst_path):
-    Path(dst_path).parent.mkdir(parents=True, exist_ok=True)
-    with rasterio.open(src_path) as src:
-        profile = src.profile.copy()
-        profile.update(count=3)
-
-        rgb = src.read([1, 2, 3])
- 
-        with rasterio.open(dst_path, "w", **profile) as dst:
-            dst.write(rgb)
-
-# for site in train_sites:
-#     src_path = f"data/plots/{site}/{site}_RGB.tif"
-#     dst_path = f"data/plots/{site}/{site}_RGB_3band.tif"
-#     four_to_three_band(src_path, dst_path)
-
 
 
 def create_training_tiles(sites, output_dir="data/plots/tiles/train/"):

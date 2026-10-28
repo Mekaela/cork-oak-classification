@@ -51,7 +51,7 @@ def stitch():
     clean.to_file(OUT_FILE)
 
 # tile_rgb()
-predict('data/train_outputs/model_3.pth')
+predict('src/models/weights/model_3_dt2_no_test_plots.pth')
 # project(TILES_PATH, PRED_PATH)
 # stitch()
 

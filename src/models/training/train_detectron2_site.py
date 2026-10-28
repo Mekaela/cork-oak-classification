@@ -45,8 +45,6 @@ def create_training_data():
     )
 
 
-
-
 def update_pretrained_model():
     trained_model = "models/predicting/250312_flexi.pth"
 
@@ -91,12 +89,7 @@ def post_training_analysis():
     plt.xlabel('Number of Iterations')
     plt.show()
 
-# takes a while to run. Saves to base folder ./predictions
-def predict(trained_model):
-    cfg = setup_cfg(update_model=trained_model)
-    cfg.MODEL.DEVICE = "cpu"
-    predictor = DefaultPredictor(cfg)
-    predict_on_data(TEST_LOCATION, predictor=predictor)
+
 
 if __name__ == "__main__":
     # data = rasterio.open(IMG_PATH)
@@ -130,7 +123,6 @@ if __name__ == "__main__":
 
 
 # this is only for visualising tiles. not pertanent to training
-# it shows bounding boxes of crowns on the tiles, so could be useful for drawing bounding boxes.
 from detectron2.data import DatasetCatalog, MetadataCatalog
 from detectron2.utils.visualizer import Visualizer
 from detectree2.models.train import combine_dicts, register_train_data

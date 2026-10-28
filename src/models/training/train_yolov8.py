@@ -1,26 +1,5 @@
-from black import output
 from ultralytics import YOLO
 from pathlib import Path
-import cv2
-import numpy as np
-import os
-import rasterio
-import geopandas as gpd
-from shapely.geometry import Polygon
-
-
-MODEL_PATH = "runs_yolo/runs_yolo8_site_300epochs/segment/yolo_plots_run/weights/best.pt"
-model = YOLO(MODEL_PATH)
-
-results = model.val(
-    data="models/training_plots/data.yaml",
-    split="val",          # or "val"
-    save_json=True,
-    save_conf=True,
-    conf=0.001,            # keep low-confidence detections for PR curve
-    iou=0.7,               # NMS IoU, not the mAP IoU threshold
-    imgsz=640,             # use the same size used in training/evaluation
-)
 
 
 def train_yolo():
@@ -32,7 +11,7 @@ def train_yolo():
 
     results = model.train(
         data=str(data_cfg), 
-        epochs=135, 
+        epochs=10, 
         # patience=50, 
         imgsz=640, 
         batch=8, 
@@ -42,10 +21,5 @@ def train_yolo():
     )
 
 
-# if __name__ == "__main__":
-    # train_yolo()
-    
-    # plot_names = ["plot61","plot175","plot238"] 
-    # for plot in plot_names:
-    #     input_image = f"data/plots/{plot}/{plot}_RGB_3band.tif"
-    #     predict_yolo(input_image, {plot})
+if __name__ == "__main__":
+    train_yolo()
