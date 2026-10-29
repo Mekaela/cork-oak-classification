@@ -62,6 +62,19 @@ for one image/site:
 - run train_detectron2.py
 
 
+## Predicting
+YOLO: navigate to src/models/predicting
+for small image (the size of plots in this study ~ 30m diameter)
+- make sure images to predict follow the path convention in the for loop in main()
+- run predict_yolo.py
+
+Detectree2:
+- change TEST_FILE to the file with the test tiles. Use the tile method if not already tiled. 
+- move the resulting predictions folder (generated in the root folder) to PRED_PATH - this keeps the predictions out of the root folder
+- comment predict() out and uncommment project() and stitch(). run
+
+
+
 ## Validation metrics
 The files val_main calls all of the validation metrics for both detection and classification, as well as height and crown area metrics. 
 - The reference path 'data/plots' must contain the 3 band RGB, and the CHM of each plot
@@ -69,3 +82,15 @@ The files val_main calls all of the validation metrics for both detection and cl
 - The predictions must be in the relevant prediction directory, as on line 11
 - The reference csv must be specified on line 17, with the columns: location_id,plot_id,tree_id,ht_m
 - The crown area csv must be specified on line 18, with the columns: tree_id,area_m2
+
+
+## pipeline to predict crowns and estmate heights and crowns
+main.py calls functions from other files to prepare required files and predict crowns, then estimate individual heights and crown areas. 
+To use this
+- make sure the RGB and DSM variables point to the images you want to predict
+- change model to either YOLO or Detectree2, depending on which model you'd like to use to detect the crowns.
+- run the file
+
+Outputs: 
+- prints in the terminal - tree count, total crown area
+- outputs csv of individual tree heights and crown areas

@@ -1,6 +1,9 @@
 from src.data_preparation.data_loader import load_tif_with_mask
 from src.data_preparation.layer_prep import compute_chm_from_dsm, estimate_dtm_from_dsm, save_layer
 from src.models.predicting.predict_yolo import predict_large_image
+from pathlib import Path
+
+from src.validation.detection_validation import extract_model_chm_height
 
 MODEL = "YOLO"
 RGB = "data/raw/20250728-ISA-RGB-10cm.tif"
@@ -19,7 +22,7 @@ if __name__ == "__main__":
     # save_layer(dtm, profile, "data/processed/20250728-ISA-dtm-10cm-06.tif", nodata=0.0)
 
     chm = compute_chm_from_dsm(dsm, dtm, dsm_mask, nodata=0.0)
-    # save_layer(chm, profile, "data/processed/20250728-ISA-chm-10cm-11.tif", nodata=0.0)
+    save_layer(chm, profile, "data/processed/20250728-ISA-chm-10cm.tif", nodata=0.0)
     
     if MODEL == "YOLO":
         model_path = "src/models/weights/best_yolov8.pt"
@@ -31,3 +34,38 @@ if __name__ == "__main__":
         print()
 
     # for each predicted polygon, estimate the height and crown areas
+    if not gdf.crs.is_projected:
+        raise ValueError(
+            f"Cannot calculate area directly in CRS {gdf.crs}. "
+            "Reproject the crowns to a metric CRS first."
+        )
+
+    gdf["area_m2"] = gdf.geometry.area
+
+    # Crown height from the CHM
+    gdf = extract_model_chm_height(
+        model=gdf,
+        chm_path="data/processed/20250728-ISA-chm-10cm.tif",
+        stat="percentile_95",
+    )
+
+    # Export crown attributes
+    crown_attributes = gdf[
+        [
+            "tree_id",
+            "confidence",
+            "class_id",
+            "area_m2",
+            "model_height_m",
+        ]
+    ]
+
+    crown_attributes.to_csv(
+        Path(OUTPUT_DIR) / "crown_areas_heights.csv",
+        index=False,
+    )
+
+    print(
+        f"Saved {len(crown_attributes)} crown records to "
+        f"{Path(OUTPUT_DIR) / 'crown_areas_heights.csv'}"
+    )
