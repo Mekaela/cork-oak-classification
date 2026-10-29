@@ -6,10 +6,22 @@ import os
 import rasterio
 import geopandas as gpd
 from shapely.geometry import Polygon
+from shapely import unary_union
+from shapely.validation import make_valid
 
-# this is from the training run, alternatively can save path in weights folder with other weights
-MODEL_PATH = "runs_yolo/runs_yolo8_site_300epochs/segment/yolo_plots_run/weights/best.pt"
-model = 'yolo_plots'
+import os
+from pathlib import Path
+
+import geopandas as gpd
+import numpy as np
+import rasterio
+from sahi import AutoDetectionModel
+from sahi.predict import get_sliced_prediction
+from shapely.geometry import Polygon
+
+# this is from the site run, change to predict plots
+MODEL_PATH = "src/models/weights/best_yolov8.pt"
+model = 'yolo_site'
 
 OUTPUT_DIR = f"src/validation/{model}"                     # Where results are
 TILE_SIZE = 640                                 # Must match training size (usually 640)
@@ -116,158 +128,119 @@ def predict_yolo(input_image, output_path):
 
     return gdf
 
-# note to self: check if this works:
-def predict_large_image(model_path, input_img, output_dir, tile_size=TILE_SIZE, overlap=OVERLAP, conf=CONF_THRESHOLD):
-    import rasterio
-    import geopandas as gpd
-    from shapely.geometry import Polygon
-    import pandas as pd
-    
-    model = YOLO(model_path)
-    
-    # Read image WITH georeferencing first
+def predict_large_image(
+    model_path,
+    input_img,
+    output_dir,
+    slice_size=640,
+    overlap_ratio=0.2,
+    conf=0.25,
+    device="cpu",
+):
+    """
+    Run YOLO segmentation on a large georeferenced image using SAHI,
+    then convert detected masks to a map-coordinate GeoPackage.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    detection_model = AutoDetectionModel.from_pretrained(
+        model_type="ultralytics",
+        model_path=model_path,
+        confidence_threshold=conf,
+        device=device,
+    )
+
     with rasterio.open(input_img) as src:
         transform = src.transform
         crs = src.crs
+
         img_array = src.read()
-        
-        # Handle single or multi-band
+
         if src.count == 1:
-            img_array = np.stack([img_array[0]] * 3, axis=-1)
-        else:
-            img_array = np.transpose(img_array, (1, 2, 0))
-        
-        # Convert to uint8 if needed
+            img_array = np.stack([img_array[0]] * 3, axis=0)
+        elif src.count >= 3:
+            img_array = img_array[:3]
+
+        # CHW -> HWC
+        img_array = np.transpose(img_array, (1, 2, 0))
+
         if img_array.dtype != np.uint8:
-            img_array = ((img_array - img_array.min()) / (img_array.max() - img_array.min()) * 255).astype(np.uint8)
-        
-        # Rasterio reads as RGB, OpenCV expects BGR
-        img = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+            band_min = img_array.min(axis=(0, 1), keepdims=True)
+            band_max = img_array.max(axis=(0, 1), keepdims=True)
+            img_array = (
+                255
+                * (img_array - band_min)
+                / np.maximum(band_max - band_min, 1)
+            ).astype(np.uint8)
 
-    if img is None:
-        print(f"Error: Could not read {input_img}")
-        return
+        # SAHI expects RGB.
+        image = img_array
 
-    h, w, _ = img.shape
-    print(f"Processing image: {h}x{w}")
+    result = get_sliced_prediction(
+        image,
+        detection_model,
+        slice_height=slice_size,
+        slice_width=slice_size,
+        overlap_height_ratio=overlap_ratio,
+        overlap_width_ratio=overlap_ratio,
+        perform_standard_pred=False,
+        postprocess_type="GREEDYNMM",
+        postprocess_match_metric="IOS",
+        postprocess_match_threshold=0.2,
+    )
 
-    os.makedirs(output_dir, exist_ok=True)
+    records = []
 
-    step_x = tile_size - overlap
-    step_y = tile_size - overlap
+    for prediction in result.object_prediction_list:
+        mask = prediction.mask
 
-    all_detections = []
+        if mask is None:
+            continue
 
-    # Sliding window
-    y_start = 0
-    while y_start < h:
-        x_start = 0
-        while x_start < w:
-            y_end = min(y_start + tile_size, h)
-            x_end = min(x_start + tile_size, w)
-            
-            tile = img[y_start:y_end, x_start:x_end]
-            
-            if tile.size == 0:
-                x_start += step_x
+        # SAHI stores one or more COCO polygons:
+        # [[x1, y1, x2, y2, ...], ...]
+        for segmentation in mask.segmentation:
+            coords = np.asarray(segmentation, dtype=float).reshape(-1, 2)
+
+            if len(coords) < 3:
                 continue
-            
-            results = model.predict(
-                source=tile,
-                conf=conf,
-                verbose=False,
-                imgsz=tile_size
-            )
-            
-            for result in results:
-                if result.masks is not None:
-                    polygons = result.masks.xy
-                    confidences = result.boxes.conf.cpu().numpy()
-                    classes = result.boxes.cls.cpu().numpy()
-                    
-                    for i, poly in enumerate(polygons):
-                        if confidences[i] < conf:
-                            continue
-                        
-                        # Scale polygon to actual tile dimensions
-                        tile_h, tile_w = tile.shape[:2]
-                        scale_x = tile_w / tile_size
-                        scale_y = tile_h / tile_size
-                        
-                        scaled_poly = poly.copy()
-                        scaled_poly[:, 0] *= scale_x
-                        scaled_poly[:, 1] *= scale_y
-                        
-                        # Shift to global pixel coordinates
-                        global_points = scaled_poly + np.array([x_start, y_start])
-                        
-                        all_detections.append({
-                            "points": global_points,
-                            "conf": float(confidences[i]),
-                            "cls": int(classes[i])
-                        })
-            
-            x_start += step_x
-            if x_start >= w:
-                break
-        
-        y_start += step_y
-        if y_start >= h:
-            break
 
-    # Convert pixel coordinates to geographic coordinates and create polygons
-    geographic_polygons = []
-    
-    for det in all_detections:
-        points = det["points"]
-        
-        # Transform pixel coordinates to geographic coordinates
-        # rasterio.transform.xy converts row, col to x, y
-        # But our points are in (x, y) pixel space, so we need to use the transform directly
-        geo_coords = []
-        for px, py in points:
-            # Transform from pixel (col, row) to geographic (x, y)
-            gx, gy = transform * (px, py)
-            geo_coords.append((gx, gy))
-        
-        # Create Shapely Polygon
-        if len(geo_coords) >= 3:  # Need at least 3 points for a polygon
+            geo_coords = [
+                transform * (float(x), float(y))
+                for x, y in coords
+            ]
+
             polygon = Polygon(geo_coords)
-            
-            geographic_polygons.append({
-                "geometry": polygon,
-                "confidence": det["conf"],
-                "class": det["cls"],
-                "area_px": polygon.area  # Optional: area in pixel units
-            })
 
-    # Create GeoDataFrame
-    gdf = gpd.GeoDataFrame(geographic_polygons, crs=crs)
-    
-    # Optional: Add additional attributes
+            if not polygon.is_valid:
+                polygon = polygon.buffer(0)
+
+            if polygon.is_empty:
+                continue
+
+            records.append(
+                {
+                    "geometry": polygon,
+                    "confidence": float(prediction.score.value),
+                    "class_id": int(prediction.category.id),
+                    "class_name": prediction.category.name,
+                    "area_px": polygon.area,
+                }
+            )
+
+    gdf = gpd.GeoDataFrame(records, crs=crs)
     gdf["tree_id"] = range(len(gdf))
-    gdf = gdf[["tree_id", "class", "confidence", "area_px", "geometry"]]
-    
-    print(f"Created {len(gdf)} polygon features")
 
-    # Save to GeoPackage
-    output_gpkg = os.path.join(output_dir, "tree_polygons_20261002_080_site.gpkg")
-    gdf.to_file(output_gpkg, driver="GPKG", layer="tree_crowns")
-    
-    print(f"✅ Done! Found {len(gdf)} trees (polygons).")
-    print(f"GeoPackage saved to: {output_gpkg}")
-    print(f"CRS: {crs}")
-    
-    # Optional: Also save as GeoJSON for easy viewing
-    output_geojson = os.path.join(output_dir, "tree_polygons_20261002_080_site.geojson")
-    gdf.to_file(output_geojson, driver="GeoJSON")
-    print(f"GeoJSON saved to: {output_geojson}")
-    
+    output_gpkg = Path(output_dir) / "tree_crowns_predicted.gpkg"
+    gdf.to_file(output_gpkg, layer="tree_crowns", driver="GPKG")
+
+    print(f"Saved {len(gdf)} crowns to {output_gpkg}")
+
     return gdf
 
 
 if __name__ == "__main__":
-    # predict_large_image(MODEL_PATH, INPUT_IMAGE, OUTPUT_DIR, tile_size=TILE_SIZE, overlap=OVERLAP, conf=CONF_THRESHOLD)
+    # predict_large_image(MODEL_PATH, "data/raw/20250728-ISA-RGB-10cm.tif", OUTPUT_DIR, slice_size=TILE_SIZE, overlap_ratio=0.2, conf=CONF_THRESHOLD)
     
     plot_names = ["plot61","plot175","plot238"] 
     for plot in plot_names:
