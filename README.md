@@ -88,7 +88,7 @@ The files val_main calls all of the validation metrics for both detection and cl
 main.py calls functions from other files to prepare required files and predict crowns, then estimate individual heights and crown areas. 
 To use this
 - make sure the RGB and DSM variables point to the images you want to predict
-- change model to either YOLO or Detectree2, depending on which model you'd like to use to detect the crowns.
+- change model to either YOLO or DT2 (Detectree2), depending on which model you'd like to use to detect the crowns.
 - run the file
 
 Outputs: 
